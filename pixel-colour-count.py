@@ -5,6 +5,7 @@ from colormath.color_conversions import convert_color
 from colormath.color_diff import delta_e_cie2000
 from itertools import islice
 from collections import Counter
+from time import time
 
 def count_pixels(filename):
 
@@ -37,6 +38,8 @@ def main():
 
     parser = argparse.ArgumentParser(description='Calculates the sum of pixels per a color')
     parser.add_argument('image', nargs='?', default='.', help='The image to sum the pixels per a color of')
+    
+    t0 = time()
 
     args = parser.parse_args()
     color_count = count_pixels(args.image)                   
@@ -51,19 +54,13 @@ def main():
     # # Display the total number of pixels
     # # print('\t{} pixels'.format(sum(color_count[color] for color in color_count)))
 
-    threshold = 0.05
+    threshold = 0.02
 
     average_colors_dict = {}
 
-    i = 0
-    j = i + 1
+    
 
     for rgb_1_value, rgb_1_count in sorted_counts.items():
-
-        # Check to avoid StopIteration
-
-        if i == len(sorted_counts) - 1:
-            break
 
         standalone_color = True
 
@@ -119,6 +116,9 @@ def main():
         if proportion > threshold:
 
             print('{}:{}:{}'.format(color, count, proportion))
+
+
+    print(f"Time: {time() - t0}")
 
 if __name__ == '__main__':
     main()
