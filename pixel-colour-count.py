@@ -4,6 +4,7 @@ from colormath.color_objects import sRGBColor, LabColor
 from colormath.color_conversions import convert_color
 from colormath.color_diff import delta_e_cie2000
 from itertools import islice
+from collections import Counter
 
 def count_pixels(filename):
 
@@ -14,6 +15,12 @@ def count_pixels(filename):
         width, height = image.size
         rgb_image = image.convert('RGB')
 
+        pixels = rgb_image.getdata()
+
+        color_count = Counter(pixels)
+
+        return color_count
+        
         # Iterate through each pixel in the image and keep a count per unique color
 
         for x in range(width):
