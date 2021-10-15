@@ -15,10 +15,13 @@ Delta E	Perception
 11 - 49	Colors are more similar than opposite
 100	Colors are exact opposite
 '''
+
 DELTA_E_CUTOFF = 8      # Colours with a delta E > DELTA_E_CUTOFF form new colours in the palette
 DELTA_E_BACKGROUND = 5  # Colours within this delta_E of (255,255,255) are assumed to be background
 PRINT_THRESHOLD = 0.10  # Colours with a proportion larger than this will be printed at the end
+
 NUM_PALETTE_COLOURS = 10
+THUMBNAIL_SIZE = 300
 
 WHITE_LAB = convert_color(sRGBColor(255, 255, 255, is_upscaled=True), LabColor) 
 
@@ -46,12 +49,10 @@ def main():
     with Image.open(args.image) as image:
 
         rgb_image = image.convert('RGB')
-
-    # rgb_image = rgb_image.filter(ImageFilter.GaussianBlur(3))
+        if max( rgb_image.width, rgb_image.height ) > THUMBNAIL_SIZE:
+            rgb_image.thumbnail( (THUMBNAIL_SIZE, THUMBNAIL_SIZE) )
 
     color_count = count_pixels(rgb_image)
-
-    # color_count[(255,255,255)] = 0
 
     sorted_counts = dict(sorted(color_count.items(),key=lambda item: item[1], reverse=True))
     
@@ -138,7 +139,7 @@ def main():
             display_colors.append( rgb_color )
             print('{} : {} : {:.3f}'.format( rgb_color , count, proportion))
     
-    
+
     width = round( min(rgb_image.width, rgb_image.height)/NUM_PALETTE_COLOURS )
     for i, color in enumerate(display_colors):
         if i > NUM_PALETTE_COLOURS - 1:
