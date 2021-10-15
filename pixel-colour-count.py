@@ -1,8 +1,8 @@
 import argparse
-from PIL import Image, ImageDraw, ImageFont 
+from PIL import Image, ImageFilter
 from colormath.color_objects import sRGBColor, LabColor
 from colormath.color_conversions import convert_color
-from colormath.color_diff import delta_e_cie2000
+from colormath.color_diff import delta_e_cie1994, delta_e_cie2000
 from itertools import islice
 from collections import Counter
 from time import time
@@ -18,20 +18,14 @@ Delta E	Perception
 DELTA_E_CUTOFF = 10     # Colours with a delta E > DELTA_E_CUTOFF form new colours in the palette
 PRINT_THRESHOLD = 0.05  # Colours with a proportion larger than this will be printed at the end
 
-def count_pixels(filename):
+delta_function = delta_e_cie2000
 
-    color_count = {}
+def count_pixels(rgb_image):
 
-    with Image.open(filename) as image:
+    pixels = rgb_image.getdata()
 
-        rgb_image = image.convert('RGB')
-
-        pixels = rgb_image.getdata()
-
-        # returns a dict of {colour: pixels} 
-        color_count = Counter(pixels)
-
-        return color_count
+    # returns a dict of {colour: pixels} 
+    return Counter(pixels)
         
 
 def main():
@@ -39,10 +33,22 @@ def main():
     parser = argparse.ArgumentParser(description='Calculates the sum of pixels per a color')
     parser.add_argument('image', nargs='?', default='.', help='The image to sum the pixels per a color of')
     
+    args = parser.parse_args()
+
     t0 = time()
 
-    args = parser.parse_args()
-    color_count = count_pixels(args.image)                   
+    rgb_image = None
+
+    with Image.open(args.image) as image:
+
+        rgb_image = image.convert('RGB')
+
+    # rgb_image = rgb_image.filter(ImageFilter.GaussianBlur(3))
+
+    color_count = count_pixels(rgb_image)
+
+    color_count[(255,255,255)] = 0
+
     sorted_counts = dict(sorted(color_count.items(),key=lambda item: item[1], reverse=True))
     
     average_colors_list = []
@@ -65,7 +71,7 @@ def main():
             color_2_rgb = sRGBColor(rgb_2_value[0],rgb_2_value[1],rgb_2_value[2], is_upscaled=True)
             color_2_lab = convert_color(color_2_rgb, LabColor)
 
-            delta_e = delta_e_cie2000(color_1_lab, color_2_lab)
+            delta_e = delta_function(color_1_lab, color_2_lab)
 
             if delta_e < DELTA_E_CUTOFF:
                 
@@ -103,16 +109,15 @@ def main():
 
         # Sort the new palette in terms of most prominent colour
         average_colors_list.sort(key=lambda x: x[0], reverse=True)
-        
 
-    # print("colours", average_colors_list)
+    total_pixels = sum( [x[0] for _, x in enumerate(average_colors_list)] )
 
     for _, color_data in enumerate(average_colors_list):
         
         count = color_data[0]
         color = color_data[1]
 
-        proportion = count / sum(sorted_counts.values())
+        proportion = count / total_pixels
 
         if proportion > PRINT_THRESHOLD:
             print('{} : {} : {:.3f}'.format( ( round(color[0]), round(color[1]), round(color[2]) ), count, proportion))
