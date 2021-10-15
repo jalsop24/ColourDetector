@@ -5,7 +5,6 @@ from colormath.color_conversions import convert_color
 from colormath.color_diff import delta_e_cie1994, delta_e_cie2000
 from collections import Counter
 from time import time
-import os
 
 '''
 Delta E	Perception
@@ -16,7 +15,7 @@ Delta E	Perception
 100	Colors are exact opposite
 '''
 
-DELTA_E_CUTOFF = 8      # Colours with a delta E > DELTA_E_CUTOFF form new colours in the palette
+DELTA_E_CUTOFF = 10      # Colours with a delta E > DELTA_E_CUTOFF form new colours in the palette
 DELTA_E_BACKGROUND = 5  # Colours within this delta_E of (255,255,255) are assumed to be background
 PRINT_THRESHOLD = 0.10  # Colours with a proportion larger than this will be printed at the end
 
