@@ -3,9 +3,9 @@ from PIL import Image, ImageFilter
 from colormath.color_objects import sRGBColor, LabColor
 from colormath.color_conversions import convert_color
 from colormath.color_diff import delta_e_cie1994, delta_e_cie2000
-from itertools import islice
 from collections import Counter
 from time import time
+import os
 
 '''
 Delta E	Perception
@@ -15,8 +15,12 @@ Delta E	Perception
 11 - 49	Colors are more similar than opposite
 100	Colors are exact opposite
 '''
-DELTA_E_CUTOFF = 10     # Colours with a delta E > DELTA_E_CUTOFF form new colours in the palette
-PRINT_THRESHOLD = 0.05  # Colours with a proportion larger than this will be printed at the end
+DELTA_E_CUTOFF = 8      # Colours with a delta E > DELTA_E_CUTOFF form new colours in the palette
+DELTA_E_BACKGROUND = 5  # Colours within this delta_E of (255,255,255) are assumed to be background
+PRINT_THRESHOLD = 0.10  # Colours with a proportion larger than this will be printed at the end
+NUM_PALETTE_COLOURS = 10
+
+WHITE_LAB = convert_color(sRGBColor(255, 255, 255, is_upscaled=True), LabColor) 
 
 delta_function = delta_e_cie2000
 
@@ -47,7 +51,7 @@ def main():
 
     color_count = count_pixels(rgb_image)
 
-    color_count[(255,255,255)] = 0
+    # color_count[(255,255,255)] = 0
 
     sorted_counts = dict(sorted(color_count.items(),key=lambda item: item[1], reverse=True))
     
@@ -62,13 +66,17 @@ def main():
         color_1_rgb = sRGBColor(rgb_1_value[0],rgb_1_value[1],rgb_1_value[2], is_upscaled=True)
         color_1_lab = convert_color(color_1_rgb, LabColor)
 
+        # If the colour is very close to white, assume it is background and ignore it
+        if delta_function(color_1_lab, WHITE_LAB) < DELTA_E_BACKGROUND:
+            continue
+
         # Compare this colour of pixel to the palette to see if it needs to be added as a new colour or not
         for i, color_data in enumerate(average_colors_list):
             
             rgb_2_count = color_data[0]
             rgb_2_value = color_data[1]
 
-            color_2_rgb = sRGBColor(rgb_2_value[0],rgb_2_value[1],rgb_2_value[2], is_upscaled=True)
+            color_2_rgb = sRGBColor(rgb_2_value[0], rgb_2_value[1], rgb_2_value[2], is_upscaled=True)
             color_2_lab = convert_color(color_2_rgb, LabColor)
 
             delta_e = delta_function(color_1_lab, color_2_lab)
@@ -112,6 +120,12 @@ def main():
 
     total_pixels = sum( [x[0] for _, x in enumerate(average_colors_list)] )
 
+    display_colors = []
+
+    print(f"Time: {time() - t0}")
+    print(f"Colours: {len(average_colors_list)}")
+    print("Foreground Proportion: {:.3f}".format(total_pixels/(rgb_image.width*rgb_image.height)))
+
     for _, color_data in enumerate(average_colors_list):
         
         count = color_data[0]
@@ -120,11 +134,20 @@ def main():
         proportion = count / total_pixels
 
         if proportion > PRINT_THRESHOLD:
-            print('{} : {} : {:.3f}'.format( ( round(color[0]), round(color[1]), round(color[2]) ), count, proportion))
+            rgb_color = ( round(color[0]), round(color[1]), round(color[2]) )
+            display_colors.append( rgb_color )
+            print('{} : {} : {:.3f}'.format( rgb_color , count, proportion))
+    
+    
+    width = round( min(rgb_image.width, rgb_image.height)/NUM_PALETTE_COLOURS )
+    for i, color in enumerate(display_colors):
+        if i > NUM_PALETTE_COLOURS - 1:
+            break
+        color_image_square = Image.new("RGB", (width, width), color)
+        rgb_image.paste(color_image_square, (i*width, 0))
 
-
-    print(f"Time: {time() - t0}")
-    print(f"Colours: {len(average_colors_list)}")
+    rgb_image.save( args.image[:-4] + "_palette.png" )
+    
 
 if __name__ == '__main__':
     main()
