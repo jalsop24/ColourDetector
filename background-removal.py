@@ -46,14 +46,21 @@ def main():
     
     args = parser.parse_args()
 
+    KERNEL_SIZE = 3
+    kernel = np.ones((KERNEL_SIZE, KERNEL_SIZE), np.uint8)
+
     # load image
     img = cv2.imread(args.image )
+
+    # img = cv2.resize(img, )
 
     # convert to gray
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 
     # Find edges
-    edges = cv2.Canny(gray, 50, 200) # findEdges(img) 
+    # edges = cv2.Canny(gray, 50, 200)
+    # edges = cv2.morphologyEx(edges, cv2.MORPH_DILATE, kernel, iterations=1)
+    edges = findEdges(img) 
 
     # edges = clip(edges, cutoff=0)
 
@@ -69,8 +76,7 @@ def main():
 
     #cv2.drawContours(contour, contours, -1, (255,255,255), 2, cv2.LINE_AA)
 
-    KERNEL_SIZE = 3
-    kernel = np.ones((KERNEL_SIZE, KERNEL_SIZE), np.uint8) 
+     
     contour = cv2.morphologyEx(contour, cv2.MORPH_OPEN, kernel, iterations=10)
 
     contour = 255*(2*(contour.astype(np.float32))-255.0).clip(0, 1).astype(np.uint8)
