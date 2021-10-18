@@ -69,7 +69,7 @@ def main():
 
 
     # save resulting masked image
-    cv2.imwrite('person_transp_bckgrnd.png', result)
+    cv2.imwrite('.\\test_images\\person_transp_bckgrnd.png', result)
 
     # display result, though it won't show transparency
     cv2.imshow("INPUT", img)
