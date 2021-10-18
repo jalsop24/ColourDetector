@@ -20,7 +20,7 @@ def findSignificantContour(edgeImg):
         if tupl[3] == -1:
             tupl = np.insert(tupl.copy(), 0, [contourIndex])
             level1Meta.append(tupl)
-# From among them, find the contours with large surface area.
+    # From among them, find the contours with large surface area.
     contoursWithArea = []
     for tupl in level1Meta:
         contourIndex = tupl[0]
@@ -71,6 +71,8 @@ def main():
     largestContour = findSignificantContour(blur)
 
     cv2.drawContours(contour, [largestContour], 0, (255,255,255), 2, cv2.LINE_AA)
+
+
 
     cv2.fillPoly(contour, [largestContour], (255,255,255))
 
