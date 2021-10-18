@@ -33,12 +33,12 @@ def findSignificantContour(edgeImg):
     return largestContour
 
 def findEdges(image):
-
     imageCopy = image.copy().astype(np.float32) / 255.0
-    
     edges = ( edgeDetector.detectEdges(imageCopy) * 255).astype(np.uint8)
-
     return edges
+
+def clip(image, cutoff=127.5):
+    return 255 * (2 * (image.astype(np.float32) - cutoff)).clip(0, 1).astype(np.uint8)
 
 def main():
     parser = argparse.ArgumentParser(description='Calculates the sum of pixels per a color')
@@ -53,11 +53,11 @@ def main():
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 
     # Find edges
-    edges = findEdges(img) #cv2.Canny(gray, 100, 200)
-    # edges = cv2.cvtColor()
+    edges = cv2.Canny(gray, 50, 200) # findEdges(img) 
+
+    # edges = clip(edges, cutoff=0)
 
     blur  = cv2.GaussianBlur(edges, (0,0), sigmaX=1, sigmaY=1, borderType = cv2.BORDER_DEFAULT)
-
 
     contour = np.zeros(img.shape[:2], dtype=np.uint8)
 
@@ -67,6 +67,7 @@ def main():
 
     cv2.fillPoly(contour, [largestContour], (255,255,255))
 
+    #cv2.drawContours(contour, contours, -1, (255,255,255), 2, cv2.LINE_AA)
 
     KERNEL_SIZE = 3
     kernel = np.ones((KERNEL_SIZE, KERNEL_SIZE), np.uint8) 
@@ -85,7 +86,7 @@ def main():
 
     # display result, though it won't show transparency
     cv2.imshow("INPUT", img)
-    cv2.imshow("GRAY", gray)
+    #cv2.imshow("GRAY", gray)
     cv2.imshow("EDGES", edges)
     cv2.imshow("BLUR", blur)
     cv2.imshow("CONTOUR", contour)
