@@ -3,6 +3,10 @@ import argparse
 import cv2
 import numpy as np
 
+MODEL_PATH = r".\model.yml.gz"
+
+edgeDetector = cv2.ximgproc.createStructuredEdgeDetection(MODEL_PATH)
+
 def findSignificantContour(edgeImg):
     contours, hierarchy = cv2.findContours(
         edgeImg,
@@ -28,6 +32,13 @@ def findSignificantContour(edgeImg):
     largestContour = contoursWithArea[0][0]
     return largestContour
 
+def findEdges(image):
+
+    imageCopy = image.copy().astype(np.float32) / 255.0
+    
+    edges = ( edgeDetector.detectEdges(imageCopy) * 255).astype(np.uint8)
+
+    return edges
 
 def main():
     parser = argparse.ArgumentParser(description='Calculates the sum of pixels per a color')
@@ -36,15 +47,16 @@ def main():
     args = parser.parse_args()
 
     # load image
-    img = cv2.imread(args.image)
+    img = cv2.imread(args.image )
 
     # convert to gray
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 
     # Find edges
-    canny = cv2.Canny(gray, 100, 200)
+    edges = findEdges(img) #cv2.Canny(gray, 100, 200)
+    # edges = cv2.cvtColor()
 
-    blur  = cv2.GaussianBlur(canny, (0,0), sigmaX=1, sigmaY=1, borderType = cv2.BORDER_DEFAULT)
+    blur  = cv2.GaussianBlur(edges, (0,0), sigmaX=1, sigmaY=1, borderType = cv2.BORDER_DEFAULT)
 
 
     contour = np.zeros(img.shape[:2], dtype=np.uint8)
@@ -74,7 +86,7 @@ def main():
     # display result, though it won't show transparency
     cv2.imshow("INPUT", img)
     cv2.imshow("GRAY", gray)
-    cv2.imshow("CANNY", canny)
+    cv2.imshow("EDGES", edges)
     cv2.imshow("BLUR", blur)
     cv2.imshow("CONTOUR", contour)
     # cv2.imshow("CONTOUR2", contour2)
