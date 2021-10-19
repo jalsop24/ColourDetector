@@ -17,9 +17,15 @@ for filename in os.listdir(input_path):
         print("File:", input_path + filename)
 
         image = np.fromfile(input_path + filename)
-        result = remove(image)
-        img = Image.open(io.BytesIO(result)).convert("RGBA")
 
+        result = remove(image, 
+            model_name="u2net", 
+            alpha_matting=True, 
+            alpha_matting_foreground_threshold=150,
+            alpha_matting_background_threshold=10
+            )
+
+        img = Image.open(io.BytesIO(result)).convert("RGBA")
         filename = str.split(filename, ".")[0] + ouput_file_type
 
         img.save(output_path + filename)
