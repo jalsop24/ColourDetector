@@ -3,6 +3,7 @@
 /opencv_ouput/**
 /rembg_ouput/**
 /palettes
+/process_output
 
 /__pycache__
 
