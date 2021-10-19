@@ -110,9 +110,6 @@ def main(image=None):
 
     filename = str.split(filename, "\\")[-1]
 
-    print(str.split(image, ".")[-2])
-    print(filename)
-
     # save resulting masked image
     cv2.imwrite(OUTPUT_PATH + filename, result)
 
