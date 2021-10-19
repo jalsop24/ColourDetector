@@ -10,10 +10,10 @@ from PIL import Image, ImageFile
 
 ImageFile.LOAD_TRUNCATED_IMAGES = True
 
-OUTPUT_FILE_TYPE = ".csv"
-WHITE_PROPORTION_THRESHOLD = 0.1
+OUTPUT_FILE_TYPE = ".csv" 
+WHITE_PROPORTION_THRESHOLD = 0.1 # Images with white pixels less than this proportion of the image are sent to background removal
 
-FORMAT = "%i %i %i %i %.4f"
+FORMAT = "%i %i %i %i %.4f" # Format of the numbers in the csv file 
 
 def main():
     
@@ -37,16 +37,15 @@ def main():
             if colourCount[(255,255,255)] < threshold:
                 # remove background
                 result = remove(np.fromfile(inputPath + filename))
-                fgImage = Image.open(io.BytesIO(result)).convert("RGBA")
-                bgImage = Image.new("RGBA", fgImage.size, "WHITE")
-                bgImage.paste(fgImage, (0,0), fgImage)
-                image = bgImage.convert("RGB")
+                image = Image.open(io.BytesIO(result)).convert("RGBA")
 
 
             paletteImage, paletteData = pixel_colour_count.getColours(image)
 
             print("saving...")
             np.savetxt( outputPath + str.split(filename, ".")[0] + OUTPUT_FILE_TYPE, paletteData, fmt=FORMAT )
+
+
 
 
 

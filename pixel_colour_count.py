@@ -41,6 +41,13 @@ def countPixels(rgbImage):
 
 def getColours(image):
 
+    if image.getbands() == ("R", "G", "B", "A"):
+        fgImage = image.copy()
+        bgImage = Image.new("RGBA", fgImage.size, "WHITE")
+        bgImage.paste(fgImage, (0,0), fgImage)
+        image = bgImage.convert("RGB")
+
+
     rgbImage = image.convert('RGB')
 
     maxDimension = max( rgbImage.width, rgbImage.height )
