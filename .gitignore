@@ -1,5 +1,7 @@
 
 /test_images
+/opencv_ouput/**
+/rembg_ouput/**
 
 /Lib
 /Scripts/**

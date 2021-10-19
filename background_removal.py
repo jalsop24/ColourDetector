@@ -2,8 +2,13 @@
 import argparse
 import cv2
 import numpy as np
+import os
 
-MODEL_PATH = r".\model.yml.gz"
+MODEL_PATH = ".\\model.yml.gz"
+
+OUTPUT_PATH = ".\\opencv_output\\"
+
+OUTPUT_FILETYPE = ".png"
 
 edgeDetector = cv2.ximgproc.createStructuredEdgeDetection(MODEL_PATH)
 
@@ -40,19 +45,12 @@ def findEdges(image):
 def clip(image, cutoff=127.5):
     return 255 * (2 * (image.astype(np.float32) - cutoff)).clip(0, 1).astype(np.uint8)
 
-def main():
-    parser = argparse.ArgumentParser(description='Calculates the sum of pixels per a color')
-    parser.add_argument('image', nargs='?', default='.', help='The image to sum the pixels per a color of')
-    
-    args = parser.parse_args()
-
+def remove(image):
     KERNEL_SIZE = 3
     kernel = np.ones((KERNEL_SIZE, KERNEL_SIZE), np.uint8)
 
     # load image
-    img = cv2.imread(args.image )
-
-    # img = cv2.resize(img, )
+    img = cv2.imread(image)
 
     # convert to gray
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
@@ -88,19 +86,37 @@ def main():
     result = cv2.cvtColor(result, cv2.COLOR_BGR2BGRA)
     result[:, :, 3] = contour
 
+    #cv2.imshow("INPUT", img)
+    #cv2.imshow("GRAY", gray)
+    #cv2.imshow("EDGES", edges)
+    #cv2.imshow("BLUR", blur)
+    #cv2.imshow("CONTOUR", contour)
+
+    return result
+
+
+def main(image=None):
+    parser = argparse.ArgumentParser(description='Calculates the sum of pixels per a color')
+    parser.add_argument('image', nargs='?', default='.', help='The image to sum the pixels per a color of')
+    
+    args = parser.parse_args()
+
+    if image is None:
+        image = args.image
+
+    result = remove(image)
+
+    filename = str.split(image, ".")[-2] + OUTPUT_FILETYPE
+
+    filename = str.split(filename, "\\")[-1]
+
+    print(str.split(image, ".")[-2])
+    print(filename)
 
     # save resulting masked image
-    cv2.imwrite('.\\test_images\\person_transp_bckgrnd.png', result)
+    cv2.imwrite(OUTPUT_PATH + filename, result)
 
-    # display result, though it won't show transparency
-    cv2.imshow("INPUT", img)
-    #cv2.imshow("GRAY", gray)
-    cv2.imshow("EDGES", edges)
-    cv2.imshow("BLUR", blur)
-    cv2.imshow("CONTOUR", contour)
-    # cv2.imshow("CONTOUR2", contour2)
-    # cv2.imshow("MASK", mask)
-    cv2.imshow("RESULT", result )
+    cv2.imshow("RESULT", result)
     cv2.waitKey(0)
     cv2.destroyAllWindows()
     

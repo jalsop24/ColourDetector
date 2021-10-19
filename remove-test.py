@@ -2,12 +2,28 @@
 from rembg.bg import remove
 import numpy as np
 import io
-from PIL import Image
+from PIL import Image, ImageFile
+import os
 
-input_path = r".\test_images\sample2.png"
-output_path = 'out.png'
+ImageFile.LOAD_TRUNCATED_IMAGES = True
 
-f = np.fromfile(input_path)
-result = remove(f)
-img = Image.open(io.BytesIO(result)).convert("RGBA")
-img.save(output_path)
+input_path = ".\\test_images\\"
+output_path = ".\\rembg_output\\"
+
+ouput_file_type = ".png"
+
+for filename in os.listdir(input_path):
+    if filename.endswith(".png") or filename.endswith(".jpg") or filename.endswith(".jpeg"): 
+        print("File:", input_path + filename)
+
+        image = np.fromfile(input_path + filename)
+        result = remove(image)
+        img = Image.open(io.BytesIO(result)).convert("RGBA")
+
+        filename = str.split(filename, ".")[0] + ouput_file_type
+
+        img.save(output_path + filename)
+
+    
+
+
