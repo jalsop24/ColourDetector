@@ -5,6 +5,7 @@ from colormath.color_conversions import convert_color
 from colormath.color_diff import delta_e_cie1994, delta_e_cie2000
 from collections import Counter
 from time import time
+import numpy as np
 
 '''
 Delta E	Perception
@@ -38,20 +39,15 @@ def countPixels(rgbImage):
     return Counter(pixels)
 
 
-def getColours(imageLocation):
+def getColours(image):
 
-    rgbImage = None
+    rgbImage = image.convert('RGB')
 
-    # Open the file and extract contents. Resize if necessary
-    with Image.open(imageLocation) as image:
+    maxDimension = max( rgbImage.width, rgbImage.height )
 
-        rgbImage = image.convert('RGB')
-
-        maxDimension = max( rgbImage.width, rgbImage.height )
-
-        if maxDimension > THUMBNAIL_SIZE:
-            scaleFactor =  THUMBNAIL_SIZE / maxDimension
-            rgbImage.thumbnail( (scaleFactor * rgbImage.width, scaleFactor * rgbImage.height) )
+    if maxDimension > THUMBNAIL_SIZE:
+        scaleFactor =  THUMBNAIL_SIZE / maxDimension
+        rgbImage.thumbnail( (round(scaleFactor * rgbImage.width), round(scaleFactor * rgbImage.height)) )
 
 
     colourCount = countPixels(rgbImage)
@@ -66,7 +62,7 @@ def getColours(imageLocation):
 
         matchedIndex = None
 
-        inputSRGBValue = sRGBColor(inputRGBValue[0],inputRGBValue[1],inputRGBValue[2], is_upscaled=True)
+        inputSRGBValue = sRGBColor(inputRGBValue[0], inputRGBValue[1], inputRGBValue[2], is_upscaled=True)
         inputLABValue = convert_color(inputSRGBValue, LabColor)
 
         # If the colour is very close to white, assume it is background and ignore it
@@ -79,10 +75,10 @@ def getColours(imageLocation):
             referenceRGBCount = referenceColourData[0]
             referenceRGBValue = referenceColourData[1]
 
-            color_2_rgb = sRGBColor(referenceRGBValue[0], referenceRGBValue[1], referenceRGBValue[2], is_upscaled=True)
-            color_2_lab = convert_color(color_2_rgb, LabColor)
+            referenceSRGBValue = sRGBColor(referenceRGBValue[0], referenceRGBValue[1], referenceRGBValue[2], is_upscaled=True)
+            referenceLABValue = convert_color(referenceSRGBValue, LabColor)
 
-            delta_e = deltaFunction(inputLABValue, color_2_lab)
+            delta_e = deltaFunction(inputLABValue, referenceLABValue)
 
             if delta_e < DELTA_E_CUTOFF:
                 
@@ -137,8 +133,8 @@ def getColours(imageLocation):
         if proportion > PRINT_THRESHOLD:
             rgbColour = ( round(color[0]), round(color[1]), round(color[2]) )
             displayColors.append( rgbColour )
+            outputData.append( (rgbColour[0], rgbColour[1], rgbColour[2], count, proportion) )
 
-            outputData.append( (rgbColour, count, proportion) )
 
     width = round( min(rgbImage.width, rgbImage.height)/NUM_PALETTE_COLOURS )
     for i, color in enumerate(displayColors):
@@ -147,7 +143,7 @@ def getColours(imageLocation):
         color_image_square = Image.new("RGB", (width, width), color)
         rgbImage.paste(color_image_square, (i*width, 0))
 
-    return rgbImage, outputData
+    return rgbImage, np.array(outputData)
     
 
 
@@ -158,21 +154,22 @@ def main():
     
     args = parser.parse_args()
 
+    with Image.open(args.image) as image:
 
-    rgbImage, outputData = getColours(args.image)
-    
-    for i, data in enumerate(outputData):
-        rgbColour = data[0]
-        count = data[1]
-        proportion = data[2]
-        print('{} : {} : {:.3f}'.format( rgbColour , count, proportion))
+        rgbImage, outputData = getColours(image)
+
+        for _, data in enumerate(outputData):
+            rgbColour = (data[0], data[1], data[2] )
+            count = data[3]
+            proportion = data[4]
+            print('{} : {} : {:.3f}'.format( rgbColour , count, proportion))
 
 
-    filename = str.split(args.image, ".")[-2] + OUTPUT_FILE_TYPE
+        filename = str.split(args.image, ".")[-2] + OUTPUT_FILE_TYPE
 
-    filename = str.split(filename, "\\")[-1]
+        filename = str.split(filename, "\\")[-1]
 
-    rgbImage.save( OUTPUT_PATH + filename )
+        rgbImage.save( OUTPUT_PATH + filename )
 
     
     
