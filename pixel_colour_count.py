@@ -41,32 +41,29 @@ def countPixels(rgbImage):
 
 def getColours(image):
 
+    # Check if image is RGBA, if so then convert it to RGB with white background
     if image.getbands() == ("R", "G", "B", "A"):
         fgImage = image.copy()
         bgImage = Image.new("RGBA", fgImage.size, "WHITE")
         bgImage.paste(fgImage, (0,0), fgImage)
         image = bgImage.convert("RGB")
 
-
     rgbImage = image.convert('RGB')
 
+    # Resize image to reduce workload
     maxDimension = max( rgbImage.width, rgbImage.height )
-
     if maxDimension > THUMBNAIL_SIZE:
         scaleFactor =  THUMBNAIL_SIZE / maxDimension
         rgbImage.thumbnail( (round(scaleFactor * rgbImage.width), round(scaleFactor * rgbImage.height)) )
 
-
+    # Get colour : pixels data, sort by volume of pixels.
     colourCount = countPixels(rgbImage)
-
     sortedCounts = dict(sorted(colourCount.items(),key=lambda item: item[1], reverse=True))
-    
     averageColoursList = []
 
     for inputRGBValue, inputRGBCount in sortedCounts.items():
 
         uniqueColour = True
-
         matchedIndex = None
 
         inputSRGBValue = sRGBColor(inputRGBValue[0], inputRGBValue[1], inputRGBValue[2], is_upscaled=True)
@@ -99,7 +96,6 @@ def getColours(image):
         # Update the colour palette 
         if uniqueColour:
             # Create a new colour within the palette
-
             averageColoursList.append( (inputRGBCount, inputRGBValue) )
 
         else:
@@ -109,17 +105,17 @@ def getColours(image):
             referenceRGBCount = referenceColourData[0]
             referenceRGBValue = referenceColourData[1]
         
-            combinedPixelCount = referenceRGBCount + inputRGBCount 
+            combinedPixelCount = referenceRGBCount + inputRGBCount
                 
-            average_r = (inputRGBValue[0]*inputRGBCount + referenceRGBValue[0]*referenceRGBCount ) / combinedPixelCount
-            average_g = (inputRGBValue[1]*inputRGBCount + referenceRGBValue[1]*referenceRGBCount ) / combinedPixelCount
-            average_b = (inputRGBValue[2]*inputRGBCount + referenceRGBValue[2]*referenceRGBCount ) / combinedPixelCount
+            averageR = (inputRGBValue[0]*inputRGBCount + referenceRGBValue[0]*referenceRGBCount ) / combinedPixelCount
+            averageG = (inputRGBValue[1]*inputRGBCount + referenceRGBValue[1]*referenceRGBCount ) / combinedPixelCount
+            averageB = (inputRGBValue[2]*inputRGBCount + referenceRGBValue[2]*referenceRGBCount ) / combinedPixelCount
 
-            rgb_average = (average_r, average_g, average_b)
+            rgbAverage = (averageR, averageG, averageB)
 
             # Remove pervious average colour and add in the new average colour
             averageColoursList.pop(i)
-            averageColoursList.append( (combinedPixelCount, rgb_average) )
+            averageColoursList.append( (combinedPixelCount, rgbAverage) )
 
         # Sort the new palette in terms of most prominent colour
         averageColoursList.sort(key=lambda x: x[0], reverse=True)
