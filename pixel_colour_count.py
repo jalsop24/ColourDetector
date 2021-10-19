@@ -23,123 +23,131 @@ NUM_PALETTE_COLOURS = 10
 THUMBNAIL_SIZE = 300
 
 OUTPUT_FILE_TYPE = ".png"
+OUTPUT_PATH = ".\\palettes\\"
 
 WHITE_LAB = convert_color(sRGBColor(255, 255, 255, is_upscaled=True), LabColor) 
 
-delta_function = delta_e_cie2000
+deltaFunction = delta_e_cie2000
 
 
-def count_pixels(rgb_image):
+def countPixels(rgbImage):
 
-    pixels = rgb_image.getdata()
+    pixels = rgbImage.getdata()
 
     # returns a dict of {colour: pixels} 
     return Counter(pixels)
 
 
-def getColours(image_location):
+def getColours(imageLocation):
 
-    rgb_image = None
+    rgbImage = None
 
-    with Image.open(image_location) as image:
+    # Open the file and extract contents. Resize if necessary
+    with Image.open(imageLocation) as image:
 
-        rgb_image = image.convert('RGB')
-        if max( rgb_image.width, rgb_image.height ) > THUMBNAIL_SIZE:
-            rgb_image.thumbnail( (THUMBNAIL_SIZE, THUMBNAIL_SIZE) )
+        rgbImage = image.convert('RGB')
 
-    color_count = count_pixels(rgb_image)
+        maxDimension = max( rgbImage.width, rgbImage.height )
 
-    sorted_counts = dict(sorted(color_count.items(),key=lambda item: item[1], reverse=True))
+        if maxDimension > THUMBNAIL_SIZE:
+            scaleFactor =  THUMBNAIL_SIZE / maxDimension
+            rgbImage.thumbnail( (scaleFactor * rgbImage.width, scaleFactor * rgbImage.height) )
+
+
+    colourCount = countPixels(rgbImage)
+
+    sortedCounts = dict(sorted(colourCount.items(),key=lambda item: item[1], reverse=True))
     
-    average_colors_list = []
+    averageColoursList = []
 
-    for rgb_1_value, rgb_1_count in sorted_counts.items():
+    for inputRGBValue, inputRGBCount in sortedCounts.items():
 
-        standalone_color = True
+        uniqueColour = True
 
-        matched_index = None
+        matchedIndex = None
 
-        color_1_rgb = sRGBColor(rgb_1_value[0],rgb_1_value[1],rgb_1_value[2], is_upscaled=True)
-        color_1_lab = convert_color(color_1_rgb, LabColor)
+        inputSRGBValue = sRGBColor(inputRGBValue[0],inputRGBValue[1],inputRGBValue[2], is_upscaled=True)
+        inputLABValue = convert_color(inputSRGBValue, LabColor)
 
         # If the colour is very close to white, assume it is background and ignore it
-        if delta_function(color_1_lab, WHITE_LAB) < DELTA_E_BACKGROUND:
+        if deltaFunction(inputLABValue, WHITE_LAB) < DELTA_E_BACKGROUND:
             continue
 
         # Compare this colour of pixel to the palette to see if it needs to be added as a new colour or not
-        for i, color_data in enumerate(average_colors_list):
+        for i, referenceColourData in enumerate(averageColoursList):
             
-            rgb_2_count = color_data[0]
-            rgb_2_value = color_data[1]
+            referenceRGBCount = referenceColourData[0]
+            referenceRGBValue = referenceColourData[1]
 
-            color_2_rgb = sRGBColor(rgb_2_value[0], rgb_2_value[1], rgb_2_value[2], is_upscaled=True)
+            color_2_rgb = sRGBColor(referenceRGBValue[0], referenceRGBValue[1], referenceRGBValue[2], is_upscaled=True)
             color_2_lab = convert_color(color_2_rgb, LabColor)
 
-            delta_e = delta_function(color_1_lab, color_2_lab)
+            delta_e = deltaFunction(inputLABValue, color_2_lab)
 
             if delta_e < DELTA_E_CUTOFF:
                 
-                standalone_color = False
+                uniqueColour = False
 
-                matched_index = i
+                matchedIndex = i
 
                 break
 
 
         # Update the colour palette 
-        if standalone_color == True:
+        if uniqueColour:
             # Create a new colour within the palette
 
-            average_colors_list.append( (rgb_1_count, rgb_1_value) )
+            averageColoursList.append( (inputRGBCount, inputRGBValue) )
 
         else:
             # Calculate weighted RGB value
-            color_data = average_colors_list[matched_index]
+            referenceColourData = averageColoursList[matchedIndex]
 
-            rgb_2_count = color_data[0]
-            rgb_2_value = color_data[1]
+            referenceRGBCount = referenceColourData[0]
+            referenceRGBValue = referenceColourData[1]
         
-            combined_pixel_count = rgb_2_count + rgb_1_count 
+            combinedPixelCount = referenceRGBCount + inputRGBCount 
                 
-            average_r = (rgb_1_value[0]*rgb_1_count + rgb_2_value[0]*rgb_2_count ) / combined_pixel_count
-            average_g = (rgb_1_value[1]*rgb_1_count + rgb_2_value[1]*rgb_2_count ) / combined_pixel_count
-            average_b = (rgb_1_value[2]*rgb_1_count + rgb_2_value[2]*rgb_2_count ) / combined_pixel_count
+            average_r = (inputRGBValue[0]*inputRGBCount + referenceRGBValue[0]*referenceRGBCount ) / combinedPixelCount
+            average_g = (inputRGBValue[1]*inputRGBCount + referenceRGBValue[1]*referenceRGBCount ) / combinedPixelCount
+            average_b = (inputRGBValue[2]*inputRGBCount + referenceRGBValue[2]*referenceRGBCount ) / combinedPixelCount
 
             rgb_average = (average_r, average_g, average_b)
 
             # Remove pervious average colour and add in the new average colour
-            average_colors_list.pop(i)
-            average_colors_list.append( (combined_pixel_count, rgb_average) )
+            averageColoursList.pop(i)
+            averageColoursList.append( (combinedPixelCount, rgb_average) )
 
         # Sort the new palette in terms of most prominent colour
-        average_colors_list.sort(key=lambda x: x[0], reverse=True)
+        averageColoursList.sort(key=lambda x: x[0], reverse=True)
 
-    total_pixels = sum( [x[0] for _, x in enumerate(average_colors_list)] )
+    totalPixels = sum( [x[0] for _, x in enumerate(averageColoursList)] )
 
-    display_colors = []
+    displayColors = []
 
+    outputData = []
 
-    for _, color_data in enumerate(average_colors_list):
+    for _, referenceColourData in enumerate(averageColoursList):
         
-        count = color_data[0]
-        color = color_data[1]
+        count = referenceColourData[0]
+        color = referenceColourData[1]
 
-        proportion = count / total_pixels
+        proportion = count / totalPixels
 
         if proportion > PRINT_THRESHOLD:
-            rgb_color = ( round(color[0]), round(color[1]), round(color[2]) )
-            display_colors.append( rgb_color )
-            print('{} : {} : {:.3f}'.format( rgb_color , count, proportion))
-    
+            rgbColour = ( round(color[0]), round(color[1]), round(color[2]) )
+            displayColors.append( rgbColour )
 
-    width = round( min(rgb_image.width, rgb_image.height)/NUM_PALETTE_COLOURS )
-    for i, color in enumerate(display_colors):
+            outputData.append( (rgbColour, count, proportion) )
+
+    width = round( min(rgbImage.width, rgbImage.height)/NUM_PALETTE_COLOURS )
+    for i, color in enumerate(displayColors):
         if i > NUM_PALETTE_COLOURS - 1:
             break
         color_image_square = Image.new("RGB", (width, width), color)
-        rgb_image.paste(color_image_square, (i*width, 0))
+        rgbImage.paste(color_image_square, (i*width, 0))
 
-    return rgb_image
+    return rgbImage, outputData
     
 
 
@@ -151,10 +159,20 @@ def main():
     args = parser.parse_args()
 
 
-    rgb_image = getColours(args.image)
+    rgbImage, outputData = getColours(args.image)
     
+    for i, data in enumerate(outputData):
+        rgbColour = data[0]
+        count = data[1]
+        proportion = data[2]
+        print('{} : {} : {:.3f}'.format( rgbColour , count, proportion))
 
-    rgb_image.save( args.image[:-4] + "_palette" )
+
+    filename = str.split(args.image, ".")[-2] + OUTPUT_FILE_TYPE
+
+    filename = str.split(filename, "\\")[-1]
+
+    rgbImage.save( OUTPUT_PATH + filename )
 
     
     
