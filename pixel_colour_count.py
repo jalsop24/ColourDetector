@@ -2,10 +2,12 @@ import argparse
 from PIL import Image, ImageFilter
 from colormath.color_objects import sRGBColor, LabColor
 from colormath.color_conversions import convert_color
-from colormath.color_diff import delta_e_cie1994, delta_e_cie2000
+from colormath.color_diff import delta_e_cie2000
 from collections import Counter
-from time import time
 import numpy as np
+from numba import jit
+
+import cProfile
 
 '''
 Delta E	Perception
@@ -27,8 +29,68 @@ OUTPUT_FILE_TYPE = ".png"
 OUTPUT_PATH = ".\\palettes\\"
 
 WHITE_LAB = convert_color(sRGBColor(255, 255, 255, is_upscaled=True), LabColor) 
+WHITE_LAB = np.array( [WHITE_LAB.lab_l, WHITE_LAB.lab_a, WHITE_LAB.lab_b] )
 
-deltaFunction = delta_e_cie2000
+# deltaFunction = delta_e_cie2000
+
+@jit
+def deltaFunction(lab_color_vector, lab_color_matrix, Kl=1, Kc=1, Kh=1):
+    """
+    Calculates the Delta E (CIE2000) of two colors.
+    """
+    L, a, b = lab_color_vector
+
+    avg_Lp = (L + lab_color_matrix[:, 0]) / 2.0
+
+    C1 = np.sqrt(np.sum(np.power(lab_color_vector[1:], 2)))
+    C2 = np.sqrt(np.sum(np.power(lab_color_matrix[:, 1:], 2), axis=1))
+
+    avg_C1_C2 = (C1 + C2) / 2.0
+
+    G = 0.5 * (1 - np.sqrt(np.power(avg_C1_C2, 7.0) / (np.power(avg_C1_C2, 7.0) + np.power(25.0, 7.0))))
+
+    a1p = (1.0 + G) * a
+    a2p = (1.0 + G) * lab_color_matrix[:, 1]
+
+    C1p = np.sqrt(np.power(a1p, 2) + np.power(b, 2))
+    C2p = np.sqrt(np.power(a2p, 2) + np.power(lab_color_matrix[:, 2], 2))
+
+    avg_C1p_C2p = (C1p + C2p) / 2.0
+
+    h1p = np.degrees(np.arctan2(b, a1p))
+    h1p += (h1p < 0) * 360
+
+    h2p = np.degrees(np.arctan2(lab_color_matrix[:, 2], a2p))
+    h2p += (h2p < 0) * 360
+
+    avg_Hp = (((np.fabs(h1p - h2p) > 180) * 360) + h1p + h2p) / 2.0
+
+    T = 1 - 0.17 * np.cos(np.radians(avg_Hp - 30)) + \
+        0.24 * np.cos(np.radians(2 * avg_Hp)) + \
+        0.32 * np.cos(np.radians(3 * avg_Hp + 6)) - \
+        0.2 * np.cos(np.radians(4 * avg_Hp - 63))
+
+    diff_h2p_h1p = h2p - h1p
+    delta_hp = diff_h2p_h1p + (np.fabs(diff_h2p_h1p) > 180) * 360
+    delta_hp -= (h2p > h1p) * 720
+
+    delta_Lp = lab_color_matrix[:, 0] - L
+    delta_Cp = C2p - C1p
+    delta_Hp = 2 * np.sqrt(C2p * C1p) * np.sin(np.radians(delta_hp) / 2.0)
+
+    S_L = 1 + ((0.015 * np.power(avg_Lp - 50, 2)) / np.sqrt(20 + np.power(avg_Lp - 50, 2.0)))
+    S_C = 1 + 0.045 * avg_C1p_C2p
+    S_H = 1 + 0.015 * avg_C1p_C2p * T
+
+    delta_ro = 30 * np.exp(-(np.power(((avg_Hp - 275) / 25), 2.0)))
+    R_C = np.sqrt((np.power(avg_C1p_C2p, 7.0)) / (np.power(avg_C1p_C2p, 7.0) + np.power(25.0, 7.0)))
+    R_T = -2 * R_C * np.sin(2 * np.radians(delta_ro))
+
+    return np.sqrt(
+        np.power(delta_Lp / (S_L * Kl), 2) +
+        np.power(delta_Cp / (S_C * Kc), 2) +
+        np.power(delta_Hp / (S_H * Kh), 2) +
+        R_T * (delta_Cp / (S_C * Kc)) * (delta_Hp / (S_H * Kh)))
 
 
 def countPixels(rgbImage):
@@ -38,6 +100,113 @@ def countPixels(rgbImage):
     # returns a dict of {colour: pixels} 
     return Counter(pixels)
 
+
+def processColours(colours):
+    
+    labColours = np.empty( (len(colours), 8)  )
+    
+    i = 0
+    for rgbValue, count in colours.items():
+        labValue = convert_color( sRGBColor(rgbValue[0], rgbValue[1], rgbValue[2], is_upscaled=True), LabColor)
+
+        labValue = np.array( [labValue.lab_l, labValue.lab_a, labValue.lab_b] )
+
+        deltaE = deltaFunction(labValue, np.atleast_2d(WHITE_LAB) )[0]
+
+        labColours[i, 0] = rgbValue[0] 
+        labColours[i, 1] = rgbValue[1]
+        labColours[i, 2] = rgbValue[2]
+        labColours[i, 3] = labValue[0]
+        labColours[i, 4] = labValue[1]
+        labColours[i, 5] = labValue[2]
+        labColours[i, 6] = deltaE
+        labColours[i, 7] = count
+        i += 1
+
+    return labColours
+
+@jit
+def combineColours(colourData):
+
+    averageColoursList = np.zeros( (colourData.shape[0], 7), dtype=np.float32 )
+    uniqueColours = 0
+
+    for x in range( len(colourData[:,0]) ):
+        
+        data = colourData[x]
+        inputRGB = np.array([ data[0], data[1], data[2] ])
+        inputLAB = np.array([ data[3], data[4], data[5] ])
+        inputCount = data[7]
+
+        uniqueColour = True
+        matchedIndex = None
+
+        # Compare this colour of pixel to the palette to see if it needs to be added as a new colour or not
+        for i in range( len(averageColoursList) ):
+
+            referenceColourData = averageColoursList[i]
+            referenceCount = referenceColourData[6]
+            
+            referenceRGB = np.array([ referenceColourData[0], referenceColourData[1], referenceColourData[2] ])
+            referenceLAB = np.array([ referenceColourData[3], referenceColourData[4], referenceColourData[5] ])
+
+            delta_e = deltaFunction( inputLAB , np.atleast_2d(referenceLAB) )[0]
+
+            if delta_e < DELTA_E_CUTOFF:
+                
+                uniqueColour = False
+
+                matchedIndex = i
+
+                break
+
+
+        # Update the colour palette 
+        if uniqueColour:
+            # Create a new colour within the palette
+            averageColoursList[uniqueColours, 0] = data[0]
+            averageColoursList[uniqueColours, 1] = data[1]
+            averageColoursList[uniqueColours, 2] = data[2]
+            averageColoursList[uniqueColours, 3] = data[3]
+            averageColoursList[uniqueColours, 4] = data[4]
+            averageColoursList[uniqueColours, 5] = data[5]
+            averageColoursList[uniqueColours, 6] = data[7]
+            
+            uniqueColours = uniqueColours + 1
+
+        else:
+            # Calculate weighted RGB value
+            referenceColourData = averageColoursList[matchedIndex]
+
+            referenceCount = referenceColourData[6]
+
+            referenceRGB = np.array([ referenceColourData[0], referenceColourData[1], referenceColourData[2] ])
+            referenceLAB = np.array([ referenceColourData[3], referenceColourData[4], referenceColourData[5] ])
+        
+            combinedPixelCount = referenceCount + inputCount
+                
+            averageR = (inputRGB[0]*inputCount + referenceRGB[0]*referenceCount ) / combinedPixelCount
+            averageG = (inputRGB[1]*inputCount + referenceRGB[1]*referenceCount ) / combinedPixelCount
+            averageB = (inputRGB[2]*inputCount + referenceRGB[2]*referenceCount ) / combinedPixelCount
+
+            averageL = (inputLAB[0]*inputCount + referenceLAB[0]*referenceCount ) / combinedPixelCount
+            averageA = (inputLAB[1]*inputCount + referenceLAB[1]*referenceCount ) / combinedPixelCount
+            averageB_LAB = (inputLAB[2]*inputCount + referenceLAB[2]*referenceCount ) / combinedPixelCount
+
+            # Remove pervious average colour and add in the new average colour
+            averageColoursList[i, 0] = averageR
+            averageColoursList[i, 1] = averageG
+            averageColoursList[i, 2] = averageB
+            averageColoursList[i, 3] = averageL
+            averageColoursList[i, 4] = averageA
+            averageColoursList[i, 5] = averageB_LAB
+            averageColoursList[i, 6] = combinedPixelCount 
+
+        # Sort the new palette in terms of most prominent colour
+        averageColoursList.sort()
+        averageColoursList = np.flip(averageColoursList, -1)
+
+    return averageColoursList
 
 def getColours(image):
 
@@ -60,67 +229,16 @@ def getColours(image):
     colourCount = countPixels(rgbImage)
     sortedCounts = dict(sorted(colourCount.items(),key=lambda item: item[1], reverse=True))
     averageColoursList = []
+    
+    colourData = processColours(sortedCounts)
 
-    for inputRGBValue, inputRGBCount in sortedCounts.items():
+    # If the colour is very close to white, assume it is background and ignore it
+    whiteFilter = colourData[:, 6] > DELTA_E_BACKGROUND
+    filteredData = colourData[whiteFilter]
 
-        uniqueColour = True
-        matchedIndex = None
+    averageColoursList = combineColours(filteredData)
 
-        inputSRGBValue = sRGBColor(inputRGBValue[0], inputRGBValue[1], inputRGBValue[2], is_upscaled=True)
-        inputLABValue = convert_color(inputSRGBValue, LabColor)
-
-        # If the colour is very close to white, assume it is background and ignore it
-        if deltaFunction(inputLABValue, WHITE_LAB) < DELTA_E_BACKGROUND:
-            continue
-
-        # Compare this colour of pixel to the palette to see if it needs to be added as a new colour or not
-        for i, referenceColourData in enumerate(averageColoursList):
-            
-            referenceRGBCount = referenceColourData[0]
-            referenceRGBValue = referenceColourData[1]
-
-            referenceSRGBValue = sRGBColor(referenceRGBValue[0], referenceRGBValue[1], referenceRGBValue[2], is_upscaled=True)
-            referenceLABValue = convert_color(referenceSRGBValue, LabColor)
-
-            delta_e = deltaFunction(inputLABValue, referenceLABValue)
-
-            if delta_e < DELTA_E_CUTOFF:
-                
-                uniqueColour = False
-
-                matchedIndex = i
-
-                break
-
-
-        # Update the colour palette 
-        if uniqueColour:
-            # Create a new colour within the palette
-            averageColoursList.append( (inputRGBCount, inputRGBValue) )
-
-        else:
-            # Calculate weighted RGB value
-            referenceColourData = averageColoursList[matchedIndex]
-
-            referenceRGBCount = referenceColourData[0]
-            referenceRGBValue = referenceColourData[1]
-        
-            combinedPixelCount = referenceRGBCount + inputRGBCount
-                
-            averageR = (inputRGBValue[0]*inputRGBCount + referenceRGBValue[0]*referenceRGBCount ) / combinedPixelCount
-            averageG = (inputRGBValue[1]*inputRGBCount + referenceRGBValue[1]*referenceRGBCount ) / combinedPixelCount
-            averageB = (inputRGBValue[2]*inputRGBCount + referenceRGBValue[2]*referenceRGBCount ) / combinedPixelCount
-
-            rgbAverage = (averageR, averageG, averageB)
-
-            # Remove pervious average colour and add in the new average colour
-            averageColoursList.pop(i)
-            averageColoursList.append( (combinedPixelCount, rgbAverage) )
-
-        # Sort the new palette in terms of most prominent colour
-        averageColoursList.sort(key=lambda x: x[0], reverse=True)
-
-    totalPixels = sum( [x[0] for _, x in enumerate(averageColoursList)] )
+    totalPixels = sum( [x[-1] for _, x in enumerate(averageColoursList)] )
 
     displayColors = []
 
@@ -128,8 +246,8 @@ def getColours(image):
 
     for _, referenceColourData in enumerate(averageColoursList):
         
-        count = referenceColourData[0]
-        color = referenceColourData[1]
+        count = referenceColourData[-1]
+        color = (referenceColourData[0], referenceColourData[1], referenceColourData[2])
 
         proportion = count / totalPixels
 
@@ -158,7 +276,7 @@ def main():
     args = parser.parse_args()
 
     with Image.open(args.image) as image:
-
+        
         rgbImage, outputData = getColours(image)
 
         for _, data in enumerate(outputData):
@@ -178,4 +296,5 @@ def main():
     
 
 if __name__ == '__main__':
+    # cProfile.run("main()")
     main()
