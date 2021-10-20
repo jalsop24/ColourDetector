@@ -2,6 +2,7 @@
 import os
 import argparse
 import io
+from time import time
 
 import pixel_colour_count
 from rembg.bg import remove
@@ -30,6 +31,7 @@ def main():
         with Image.open(inputPath + filename) as image:
             print("Processing file:", filename)
 
+            t0 = time()
             colourCount = pixel_colour_count.countPixels(image)
 
             threshold = image.width * image.height * WHITE_PROPORTION_THRESHOLD
@@ -41,6 +43,10 @@ def main():
 
 
             paletteImage, paletteData = pixel_colour_count.getColours(image)
+
+            t1 = time()
+
+            print("Time: {:.1f}s".format(t1-t0) )
 
             print("saving...")
             np.savetxt( outputPath + str.split(filename, ".")[0] + OUTPUT_FILE_TYPE, paletteData, fmt=FORMAT )
