@@ -33,8 +33,12 @@ WHITE_LAB = np.array( [WHITE_LAB.lab_l, WHITE_LAB.lab_a, WHITE_LAB.lab_b] )
 
 PARTITION = ":"
 
-LAB_DTYPE = np.int64
-LAB_BITS = 10
+LAB_DTYPE = np.uint64
+LAB_CHANNEL_DTYPE = np.uint16
+LAB_CHANNEL_DTYPE_OUT = np.int16
+LAB_BITS = 16
+
+LAB_FACTOR = 100
 
 # deltaFunction = delta_e_cie2000
 
@@ -134,17 +138,17 @@ def processColours(colours):
 def labToBits(floatL, floatA, floatB):
     bitLAB = LAB_DTYPE(0)
 
-    factor = 2**LAB_BITS
+    factor = np.uint64(2**LAB_BITS)
 
-    bitL = LAB_DTYPE(factor * floatL)
-    bitA = LAB_DTYPE(factor * floatA)
-    bitB = LAB_DTYPE(factor * floatB)
+    bitL = LAB_DTYPE( LAB_CHANNEL_DTYPE(floatL * LAB_FACTOR) )
+    bitA = LAB_DTYPE( LAB_CHANNEL_DTYPE(floatA * LAB_FACTOR) )
+    bitB = LAB_DTYPE( LAB_CHANNEL_DTYPE(floatB * LAB_FACTOR) )
 
     bitLAB |= bitL
-    bitLAB <<=  LAB_BITS
+    bitLAB *= factor
 
     bitLAB |= bitA
-    bitLAB <<= LAB_BITS
+    bitLAB *= factor
 
     bitLAB |= bitB
 
@@ -159,14 +163,14 @@ def bitsToLab(bitLAB):
     matchA = matchB << LAB_BITS
     matchL = matchA << LAB_BITS
 
-    bitL = bitLAB & matchL
-    floatL = np.float32(bitL) * factor
+    bitL = LAB_CHANNEL_DTYPE_OUT( (bitLAB & matchL) >> 2*LAB_BITS )
+    floatL = np.float32(bitL) / LAB_FACTOR 
 
-    bitA = bitLAB & matchA
-    floatA = np.float32(bitA) * factor
+    bitA = LAB_CHANNEL_DTYPE_OUT( (bitLAB & matchA) >> LAB_BITS )
+    floatA = np.float32(bitA) / LAB_FACTOR 
 
-    bitB = bitLAB & matchB
-    floatB = np.float32(bitB) * factor
+    bitB = LAB_CHANNEL_DTYPE_OUT( bitLAB & matchB )
+    floatB = np.float32(bitB) / LAB_FACTOR 
 
     return np.array([floatL, floatA, floatB])
 
@@ -214,7 +218,7 @@ def combineColours(colourData):
         
             averageColoursList[uniqueColours, 0] = bitLAB
 
-            averageColoursList[uniqueColours, 1] = data[7]
+            averageColoursList[uniqueColours, 1] = LAB_DTYPE( data[7] )
             
             uniqueColours = uniqueColours + 1
 
@@ -238,8 +242,10 @@ def combineColours(colourData):
             averageColoursList[i, 1] = combinedPixelCount 
 
         # Sort the new palette in terms of most prominent colour
-        averageColoursList.sort(axis=np.int32(0))
-        averageColoursList = np.flip(averageColoursList, -1)
+        indicies = np.flip( np.argsort(averageColoursList[:,1]) )
+        
+        averageColoursList[:,0] = averageColoursList[indicies,0]
+        averageColoursList[:,1] = averageColoursList[indicies,1]
 
     return averageColoursList
 
@@ -264,7 +270,6 @@ def getColours(image):
     # Get colour : pixels data, sort by volume of pixels.
     colourCount = countPixels(rgbImage)
     sortedCounts = dict(sorted(colourCount.items(),key=lambda item: item[1], reverse=True))
-    averageColoursList = []
     
     colourData = processColours(sortedCounts)
 
@@ -275,8 +280,6 @@ def getColours(image):
     averageColoursList = combineColours(filteredData)
 
     totalPixels = sum( [x[1] for _, x in enumerate(averageColoursList)] )
-
-
 
     displayColors = []
 
@@ -297,6 +300,7 @@ def getColours(image):
 
         if proportion > PRINT_THRESHOLD:
             rgbColour = ( round(color[0]), round(color[1]), round(color[2]) )
+
             displayColors.append( rgbColour )
             outputData.append( (rgbColour[0], rgbColour[1], rgbColour[2], count, proportion) )
 
@@ -322,6 +326,8 @@ def main():
     with Image.open(args.image) as image:
         
         rgbImage, outputData = getColours(image)
+
+        print("out", outputData)
 
         for _, data in enumerate(outputData):
             rgbColour = (data[0], data[1], data[2] )
