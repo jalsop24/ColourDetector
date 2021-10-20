@@ -31,6 +31,11 @@ OUTPUT_PATH = ".\\palettes\\"
 WHITE_LAB = convert_color(sRGBColor(255, 255, 255, is_upscaled=True), LabColor) 
 WHITE_LAB = np.array( [WHITE_LAB.lab_l, WHITE_LAB.lab_a, WHITE_LAB.lab_b] )
 
+PARTITION = ":"
+
+LAB_DTYPE = np.int64
+LAB_BITS = 10
+
 # deltaFunction = delta_e_cie2000
 
 @jit
@@ -126,9 +131,49 @@ def processColours(colours):
     return labColours
 
 @jit
+def labToBits(floatL, floatA, floatB):
+    bitLAB = LAB_DTYPE(0)
+
+    factor = 2**LAB_BITS
+
+    bitL = LAB_DTYPE(factor * floatL)
+    bitA = LAB_DTYPE(factor * floatA)
+    bitB = LAB_DTYPE(factor * floatB)
+
+    bitLAB |= bitL
+    bitLAB <<=  LAB_BITS
+
+    bitLAB |= bitA
+    bitLAB <<= LAB_BITS
+
+    bitLAB |= bitB
+
+    return bitLAB
+
+@jit
+def bitsToLab(bitLAB):
+
+    factor = 2**LAB_BITS
+
+    matchB = LAB_DTYPE(factor-1)
+    matchA = matchB << LAB_BITS
+    matchL = matchA << LAB_BITS
+
+    bitL = bitLAB & matchL
+    floatL = np.float32(bitL) * factor
+
+    bitA = bitLAB & matchA
+    floatA = np.float32(bitA) * factor
+
+    bitB = bitLAB & matchB
+    floatB = np.float32(bitB) * factor
+
+    return np.array([floatL, floatA, floatB])
+
+@jit
 def combineColours(colourData):
 
-    averageColoursList = np.zeros( (colourData.shape[0], 7), dtype=np.float32 )
+    averageColoursList = np.zeros( (colourData.shape[0], 2), dtype=LAB_DTYPE )
     uniqueColours = 0
 
     for x in range( len(colourData[:,0]) ):
@@ -139,16 +184,17 @@ def combineColours(colourData):
         inputCount = data[7]
 
         uniqueColour = True
-        matchedIndex = None
+        matchedIndex = np.int32(0)
 
         # Compare this colour of pixel to the palette to see if it needs to be added as a new colour or not
         for i in range( len(averageColoursList) ):
 
             referenceColourData = averageColoursList[i]
-            referenceCount = referenceColourData[6]
             
-            referenceRGB = np.array([ referenceColourData[0], referenceColourData[1], referenceColourData[2] ])
-            referenceLAB = np.array([ referenceColourData[3], referenceColourData[4], referenceColourData[5] ])
+            referenceLABbits = referenceColourData[0]
+            referenceCount = referenceColourData[1]
+            
+            referenceLAB = bitsToLab(referenceLABbits)
 
             delta_e = deltaFunction( inputLAB , np.atleast_2d(referenceLAB) )[0]
 
@@ -164,13 +210,11 @@ def combineColours(colourData):
         # Update the colour palette 
         if uniqueColour:
             # Create a new colour within the palette
-            averageColoursList[uniqueColours, 0] = data[0]
-            averageColoursList[uniqueColours, 1] = data[1]
-            averageColoursList[uniqueColours, 2] = data[2]
-            averageColoursList[uniqueColours, 3] = data[3]
-            averageColoursList[uniqueColours, 4] = data[4]
-            averageColoursList[uniqueColours, 5] = data[5]
-            averageColoursList[uniqueColours, 6] = data[7]
+            bitLAB = labToBits( data[3], data[4], data[5] )
+        
+            averageColoursList[uniqueColours, 0] = bitLAB
+
+            averageColoursList[uniqueColours, 1] = data[7]
             
             uniqueColours = uniqueColours + 1
 
@@ -178,35 +222,27 @@ def combineColours(colourData):
             # Calculate weighted RGB value
             referenceColourData = averageColoursList[matchedIndex]
 
-            referenceCount = referenceColourData[6]
+            referenceLABbits = referenceColourData[0]
+            referenceCount = referenceColourData[1]
 
-            referenceRGB = np.array([ referenceColourData[0], referenceColourData[1], referenceColourData[2] ])
-            referenceLAB = np.array([ referenceColourData[3], referenceColourData[4], referenceColourData[5] ])
+            referenceLAB = bitsToLab(referenceLABbits)
         
             combinedPixelCount = referenceCount + inputCount
-                
-            averageR = (inputRGB[0]*inputCount + referenceRGB[0]*referenceCount ) / combinedPixelCount
-            averageG = (inputRGB[1]*inputCount + referenceRGB[1]*referenceCount ) / combinedPixelCount
-            averageB = (inputRGB[2]*inputCount + referenceRGB[2]*referenceCount ) / combinedPixelCount
 
             averageL = (inputLAB[0]*inputCount + referenceLAB[0]*referenceCount ) / combinedPixelCount
             averageA = (inputLAB[1]*inputCount + referenceLAB[1]*referenceCount ) / combinedPixelCount
-            averageB_LAB = (inputLAB[2]*inputCount + referenceLAB[2]*referenceCount ) / combinedPixelCount
+            averageB = (inputLAB[2]*inputCount + referenceLAB[2]*referenceCount ) / combinedPixelCount
 
             # Remove pervious average colour and add in the new average colour
-            averageColoursList[i, 0] = averageR
-            averageColoursList[i, 1] = averageG
-            averageColoursList[i, 2] = averageB
-            averageColoursList[i, 3] = averageL
-            averageColoursList[i, 4] = averageA
-            averageColoursList[i, 5] = averageB_LAB
-            averageColoursList[i, 6] = combinedPixelCount 
+            averageColoursList[i, 0] = labToBits(averageL, averageA, averageB)
+            averageColoursList[i, 1] = combinedPixelCount 
 
         # Sort the new palette in terms of most prominent colour
-        averageColoursList.sort()
+        averageColoursList.sort(axis=np.int32(0))
         averageColoursList = np.flip(averageColoursList, -1)
 
     return averageColoursList
+
 
 def getColours(image):
 
@@ -238,7 +274,9 @@ def getColours(image):
 
     averageColoursList = combineColours(filteredData)
 
-    totalPixels = sum( [x[-1] for _, x in enumerate(averageColoursList)] )
+    totalPixels = sum( [x[1] for _, x in enumerate(averageColoursList)] )
+
+
 
     displayColors = []
 
@@ -246,8 +284,14 @@ def getColours(image):
 
     for _, referenceColourData in enumerate(averageColoursList):
         
-        count = referenceColourData[-1]
-        color = (referenceColourData[0], referenceColourData[1], referenceColourData[2])
+        colourBits = referenceColourData[0]
+        count = referenceColourData[1]
+        
+        labColours = bitsToLab(colourBits)
+
+        rgbColour = convert_color( LabColor(labColours[0], labColours[1], labColours[2]), sRGBColor)
+
+        color = rgbColour.get_upscaled_value_tuple()
 
         proportion = count / totalPixels
 
