@@ -40,9 +40,11 @@ LAB_BITS = 16
 
 LAB_FACTOR = 100
 
+JIT_KWARGS = {"cache": True}
+
 # deltaFunction = delta_e_cie2000
 
-@jit
+@jit(**JIT_KWARGS)
 def deltaFunction(lab_color_vector, lab_color_matrix, Kl=1, Kc=1, Kh=1):
     """
     Calculates the Delta E (CIE2000) of two colors.
@@ -134,7 +136,7 @@ def processColours(colours):
 
     return labColours
 
-@jit
+@jit(**JIT_KWARGS)
 def labToBits(floatL, floatA, floatB):
     bitLAB = LAB_DTYPE(0)
 
@@ -154,7 +156,7 @@ def labToBits(floatL, floatA, floatB):
 
     return bitLAB
 
-@jit
+@jit(**JIT_KWARGS)
 def bitsToLab(bitLAB):
 
     factor = 2**LAB_BITS
@@ -174,7 +176,7 @@ def bitsToLab(bitLAB):
 
     return np.array([floatL, floatA, floatB])
 
-@jit
+@jit(**JIT_KWARGS)
 def combineColours(colourData):
 
     averageColoursList = np.zeros( (colourData.shape[0], 2), dtype=LAB_DTYPE )

@@ -11,6 +11,7 @@ import numpy as np
 from PIL import Image, ImageFile
 
 ImageFile.LOAD_TRUNCATED_IMAGES = True
+pixel_colour_count.THUMBNAIL_SIZE = 300
 
 OUTPUT_CSV_FILE_TYPE = ".csv"
 OUTPUT_IMAGE_FILE_TYPE = ".jpg"
@@ -21,8 +22,6 @@ WHITE_PROPORTION_THRESHOLD = 0.1 # Images with white pixels less than this propo
 HEADER = "Image Name, R, G, B, Count, Proportion"
 FORMAT = "%i, %i, %i, %i, %.4f"                 # Format of the numbers in the csv file 
 COMBINED_FORMAT = "%s, " + FORMAT
-
-CHUNK_SIZE = 10
 
 def processCSVs(csvPath):
     totalData = None
@@ -47,7 +46,6 @@ def processCSVs(csvPath):
     np.savetxt(csvPath + OUTPUT_CSV_FILE_NAME + OUTPUT_CSV_FILE_TYPE, totalData, delimiter=",", header=HEADER, fmt=COMBINED_FORMAT)
 
 
-
 def processImage(filename, inputPath, outputCSVPath, outputImagePath):
     with Image.open(inputPath + filename) as image:
     
@@ -67,6 +65,7 @@ def processImage(filename, inputPath, outputCSVPath, outputImagePath):
 
         paletteImage.save( outputImagePath + str.split(filename, ".")[0] + OUTPUT_IMAGE_FILE_TYPE )
 
+
 def main():
     
     parser = argparse.ArgumentParser(description='Process the given images into their dominant colours.')
@@ -80,7 +79,6 @@ def main():
     outputCSVPath = args.outputCSV
     outputImagePath = args.outputImages
 
-    i = 0
     totalImages = 0
     runningProcesses = []
 
@@ -94,9 +92,7 @@ def main():
 
         runningProcesses.append(newProcess)
 
-        i += 1
         totalImages += 1
-        i %= CHUNK_SIZE
     
     for _, process in enumerate(runningProcesses):
         process.join()
