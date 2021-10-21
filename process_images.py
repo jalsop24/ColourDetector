@@ -38,7 +38,7 @@ def processCSVs(csvPath):
 
         newArray = np.empty( (data.shape[0], data.shape[1] + 1 ), dtype="O" )
 
-        newArray[:,0] = filename
+        newArray[:,0] = filename.split(".")[0]
 
         newArray[:,1:] = data
 
