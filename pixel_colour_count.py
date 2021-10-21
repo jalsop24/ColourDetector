@@ -23,7 +23,7 @@ DELTA_E_BACKGROUND = 5  # Colours within this delta_E of (255,255,255) are assum
 PRINT_THRESHOLD = 0.10  # Colours with a proportion larger than this will be printed at the end
 
 NUM_PALETTE_COLOURS = 10
-THUMBNAIL_SIZE = 300
+THUMBNAIL_SIZE = 200
 
 OUTPUT_FILE_TYPE = ".png"
 OUTPUT_PATH = ".\\palettes\\"
