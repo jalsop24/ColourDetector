@@ -2,7 +2,7 @@
 import os
 import argparse
 import io
-from time import thread_time_ns, time
+from time import time
 from multiprocessing import Process
 
 import pixel_colour_count
