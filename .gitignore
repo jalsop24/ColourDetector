@@ -5,7 +5,7 @@
 /palettes
 /process_output
 
-/__pycache__
+**/__pycache__
 
 /Lib
 /Scripts/**
